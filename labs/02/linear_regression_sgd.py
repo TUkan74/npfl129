@@ -14,7 +14,7 @@ parser.add_argument("--data_size", default=100, type=int, help="Data size")
 parser.add_argument("--epochs", default=50, type=int, help="Number of SGD training epochs")
 parser.add_argument("--l2", default=0.0, type=float, help="L2 regularization strength")
 parser.add_argument("--learning_rate", default=0.01, type=float, help="Learning rate")
-parser.add_argument("--plot", default=False, const=True, nargs="?", type=str, help="Plot the predictions")
+parser.add_argument("--plot", default=True, const=True, nargs="?", type=str, help="Plot the predictions")
 parser.add_argument("--recodex", default=False, action="store_true", help="Running in ReCodEx")
 parser.add_argument("--seed", default=92, type=int, help="Random seed")
 parser.add_argument("--test_size", default=0.5, type=lambda x: int(x) if x.isdigit() else float(x), help="Test size")
@@ -30,11 +30,15 @@ def main(args: argparse.Namespace) -> tuple[list[float], float, float]:
 
     # TODO: Append a constant feature with value 1 to the end of every input data.
     # Then we do not need to explicitly represent bias - it becomes the last weight.
+    data = np.hstack([data, np.ones((data.shape[0], 1))])
+
 
     # TODO: Split the dataset into a train set and a test set.
     # Use `sklearn.model_selection.train_test_split` method call, passing
     # arguments `test_size=args.test_size, random_state=args.seed`.
-    train_data, test_data, train_target, test_target = ...
+    train_data, test_data, train_target, test_target = sklearn.model_selection.train_test_split(
+        data, target, test_size=args.test_size, random_state=args.seed
+    )
 
     # Generate initial linear regression weights.
     weights = generator.uniform(size=train_data.shape[1], low=-0.1, high=0.1)
@@ -53,14 +57,41 @@ def main(args: argparse.Namespace) -> tuple[list[float], float, float]:
         #   where we set the bias to zero because the bias should not be regularized,
         # and the SGD update is
         #   weights = weights - args.learning_rate * gradient
+        train_data_shuffled = train_data[permutation]
+        train_target_shuffled = train_target[permutation]
+
+        for i in range(0, len(train_data), args.batch_size):
+            batch_data = train_data_shuffled[i:i + args.batch_size]
+            batch_target = train_target_shuffled[i:i + args.batch_size]
+
+            predictions = np.dot(batch_data, weights)
+            errors = predictions - batch_target
+
+            
+            gradient = np.dot(errors, batch_data) / args.batch_size
+
+            regularization = args.l2 * np.concatenate([weights[:-1], [0]])
+            gradient += regularization
+
+            weights -= args.learning_rate * gradient
+
 
         # TODO: Append current RMSE on train/test to `train_rmses`/`test_rmses`.
-        train_rmses.append(...)
-        test_rmses.append(...)
+        # Append current RMSE on train/test to `train_rmses`/`test_rmses`.
+        train_predictions = np.dot(train_data, weights)
+        train_rmse = np.sqrt(np.mean((train_predictions - train_target) ** 2))
+        train_rmses.append(train_rmse)
+
+        test_predictions = np.dot(test_data, weights)
+        test_rmse = np.sqrt(np.mean((test_predictions - test_target) ** 2))
+        test_rmses.append(test_rmse)
 
     # TODO: Compute into `explicit_rmse` test data RMSE when fitting
     # `sklearn.linear_model.LinearRegression` on `train_data` (ignoring `args.l2`).
-    explicit_rmse = ...
+    linear_model = sklearn.linear_model.LinearRegression()
+    linear_model.fit(train_data, train_target)
+    explicit_predictions = linear_model.predict(test_data)
+    explicit_rmse = np.sqrt(sklearn.metrics.mean_squared_error(test_target, explicit_predictions))
 
     if args.plot:
         import matplotlib.pyplot as plt
