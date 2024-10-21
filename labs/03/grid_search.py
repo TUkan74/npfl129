@@ -8,6 +8,7 @@ import sklearn.metrics
 import sklearn.model_selection
 import sklearn.pipeline
 import sklearn.preprocessing
+python_executable = r"C:/Tools/Python/python.exe"
 
 parser = argparse.ArgumentParser()
 # These arguments will be set appropriately by ReCodEx, even if you change them.
@@ -28,6 +29,8 @@ def main(args: argparse.Namespace) -> float:
     # TODO: Split the dataset into a train set and a test set.
     # Use `sklearn.model_selection.train_test_split` method call, passing
     # arguments `test_size=args.test_size, random_state=args.seed`.
+    X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
+        dataset.data, dataset.target, test_size=args.test_size, random_state=args.seed)
 
     # TODO: Create a pipeline, which
     # 1. passes the inputs through `sklearn.preprocessing.MinMaxScaler()`,
@@ -44,7 +47,28 @@ def main(args: argparse.Namespace) -> float:
     # For the best combination of parameters, compute the test set accuracy.
     #
     # The easiest way is to use `sklearn.model_selection.GridSearchCV`.
-    test_accuracy = ...
+    pipe = sklearn.pipeline.Pipeline([
+        ('scaler', sklearn.preprocessing.MinMaxScaler()),
+        ('poly', sklearn.preprocessing.PolynomialFeatures()),
+        ('clf', sklearn.linear_model.LogisticRegression(random_state=args.seed)),
+    ])
+
+    param_grid = {
+        'poly__degree': [1, 2],
+        'clf__C': [0.01, 1, 100],
+        'clf__solver': ['lbfgs', 'sag'],
+    }
+
+    # Use StratifiedKFold with 5 folds.
+    cv = sklearn.model_selection.StratifiedKFold(n_splits=5)
+
+    # Perform grid search.
+    model = sklearn.model_selection.GridSearchCV(pipe, param_grid=param_grid, cv=cv)
+    model.fit(X_train, y_train)
+
+    # Compute test set accuracy.
+    y_pred = model.predict(X_test)
+    test_accuracy = sklearn.metrics.accuracy_score(y_test, y_pred)
 
     # If `model` is a fitted `GridSearchCV`, you can use the following code
     # to show the results of all the hyperparameter values evaluated:
@@ -62,6 +86,13 @@ def main(args: argparse.Namespace) -> float:
     # or you can use the following code (and the corresponding imports):
     #   warnings.filterwarnings("ignore", category=sklearn.exceptions.ConvergenceWarning)
 
+    # Print the results of all hyperparameter combinations.
+    for rank, accuracy, params in zip(model.cv_results_["rank_test_score"],
+                                      model.cv_results_["mean_test_score"],
+                                      model.cv_results_["params"]):
+        print("Rank: {:2d} Cross-val: {:.1f}%".format(rank, 100 * accuracy),
+              *("{}: {:<5}".format(key, value) for key, value in params.items()))
+        
     return 100 * test_accuracy
 
 
