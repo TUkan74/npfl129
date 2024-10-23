@@ -9,6 +9,10 @@ import urllib.request
 
 import numpy as np
 import numpy.typing as npt
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
 
 parser = argparse.ArgumentParser()
 # These arguments will be set appropriately by ReCodEx, even if you change them.
@@ -52,7 +56,23 @@ def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
         train = Dataset()
 
         # TODO: Train a model on the given dataset and store it in `model`.
-        model = ...
+        X = train.data
+        y = train.target
+
+        model = make_pipeline(
+            StandardScaler(),
+            PolynomialFeatures(degree=2, interaction_only=False, include_bias=False),
+            LogisticRegression(max_iter=100000, random_state=args.seed)
+        )
+
+        scores = cross_val_score(model, X, y, cv=5, scoring='accuracy')
+        print(f"Cross-validation accuracies: {scores}")
+        print(f"Mean cross-validation accuracy: {np.mean(scores):.4f}")
+
+        model.fit(X, y)
+
+        train_accuracy = model.score(X, y)
+        print(f"Training accuracy: {train_accuracy:.4f}")
 
         # Serialize the model.
         with lzma.open(args.model_path, "wb") as model_file:
@@ -66,7 +86,7 @@ def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
             model = pickle.load(model_file)
 
         # TODO: Generate `predictions` with the test set predictions.
-        predictions = ...
+        predictions = model.predict(test.data)
 
         return predictions
 
